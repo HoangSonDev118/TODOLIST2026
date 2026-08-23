@@ -181,8 +181,8 @@ async function queueDailyTodayTasks(): Promise<DailyReminderResult> {
       result.alreadyQueued++;
       continue;
     }
-    const names = rows.slice(0, 3).map((task) => task.title).join(" • ");
-    const rest = rows.length > 3 ? ` và ${rows.length - 3} việc khác` : "";
+    const names = rows.slice(0, 3).map((task) => `- ${task.title}`).join("\n");
+    const rest = rows.length > 3 ? `\n- Và ${rows.length - 3} việc khác, nhấn để xem thêm` : "";
     try {
       await queuePushNotification(userId, { title: `Hôm nay có ${rows.length} việc cần làm`, body: `${names}${rest}`, url: "/schedule" }, 0);
     } catch (error) {

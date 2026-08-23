@@ -2259,7 +2259,7 @@ export default function SchedulePage() {
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex gap-2"><p className="min-w-0 flex-1 text-sm font-semibold leading-5">{notification.title}</p><span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${iconColor}`}>{icon}</span>{!notification.isRead && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-violet-500" />}</div>
-                  <p className={`mt-0.5 text-xs leading-5 ${th.subtext}`}>{notification.body}</p>
+                  <p className={`mt-0.5 whitespace-pre-line text-xs leading-5 ${th.subtext}`}>{notification.body}</p>
                   <p className={`mt-1 text-[10px] ${th.subtext}`}>{new Date(notification.createdAt).toLocaleString("vi-VN", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
                 </div>
               </article>;
