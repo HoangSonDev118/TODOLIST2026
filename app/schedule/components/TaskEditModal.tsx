@@ -7,7 +7,7 @@ import { SLOTS, STATUS_LABEL } from "../lib/constants";
 import { absDayToDate, absDayToDateInput, dateInputToAbsDay, dayShortOf } from "../lib/date";
 import { colorToDisplayHex } from "../lib/domain/task";
 import { getMultiDayEndSlot, isMultiDayTask } from "../lib/multi-day";
-import type { ScheduleScope, SessionUser, Task, TaskComment } from "../lib/types";
+import type { ScheduleScope, SessionUser, Task, TaskComment, TaskLabelValue } from "../lib/types";
 import { HalfHourTimePicker } from "./HalfHourTimePicker";
 
 interface TaskEditModalProps {
@@ -288,21 +288,18 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
               </span>
             )
           )}
-          <button type="button" onClick={onDelete} className="rounded-md bg-red-500 px-5 py-2 text-sm font-bold transition hover:bg-red-600">Xóa</button>
           {!isCompanySchedule && isViewingOwnSchedule && !isReadOnly && (
-            <button
-              type="button"
-              onClick={() => patchAndMarkChanged({ label: task.label === "PERSONAL" ? "DEFAULT" : "PERSONAL" })}
-              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition ${task.label === "PERSONAL" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-zinc-700 text-zinc-300 border border-zinc-600"}`}
-              title={task.label === "PERSONAL" ? "Việc cá nhân: Chỉ bạn nhìn thấy" : "Giao việc: Mọi người đều thấy"}
+            <select
+              value={task.label}
+              onChange={(e) => patchAndMarkChanged({ label: e.target.value as TaskLabelValue })}
+              className={`rounded-md px-2 py-2 text-xs font-semibold border transition cursor-pointer outline-none ${task.label === "PERSONAL" ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" : "bg-zinc-700 text-zinc-300 border-zinc-600"}`}
+              title="Chọn loại công việc"
             >
-              {task.label === "PERSONAL" ? (
-                <><svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5"><path fillRule="evenodd" d="M8 1a3.5 3.5 0 0 0-3.5 3.5v7A3.5 3.5 0 0 0 11.5 15h2a.5.5 0 0 0 .5-.5v-12a.5.5 0 0 0-.5-.5h-2A3.5 3.5 0 0 0 8 1z" /></svg>Việc cá nhân</>
-              ) : (
-                <>Giao việc</>
-              )}
-            </button>
+              <option value="PERSONAL">🔒 Việc cá nhân</option>
+              <option value="DEFAULT">Giao việc</option>
+            </select>
           )}
+          <button type="button" onClick={onDelete} className="rounded-md bg-red-500 px-5 py-2 text-sm font-bold transition hover:bg-red-600">Xóa</button>
         </div>
 
         <div className="border-b border-white/15 px-[18px] py-5">

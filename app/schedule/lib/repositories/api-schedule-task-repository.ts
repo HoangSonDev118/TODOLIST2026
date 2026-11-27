@@ -23,6 +23,17 @@ export class ApiScheduleTaskRepository implements ScheduleTaskRepository {
 
   constructor(private readonly scope: ScheduleScope, private readonly ownerId: number | null, private readonly viewerId: number | null = null) {}
 
+  /** Check if personal tasks should be hidden for the current viewer */
+  private shouldFilterPersonal(): boolean {
+    return this.scope === "USER" && this.viewerId !== null && this.ownerId !== null && this.viewerId !== this.ownerId;
+  }
+
+  /** Filter out PERSONAL tasks when viewer is not the owner */
+  private applyPersonalFilter(tasks: Task[]): Task[] {
+    if (!this.shouldFilterPersonal()) return tasks;
+    return tasks.filter((task) => task.label !== "PERSONAL");
+  }
+
   async load(): Promise<Task[]> {
     const tasks = await this.fetchCloud();
     this.remember(tasks);
@@ -32,7 +43,8 @@ export class ApiScheduleTaskRepository implements ScheduleTaskRepository {
   loadCached(): Task[] | null {
     try {
       const parsed = JSON.parse(localStorage.getItem(this.cacheKey()) ?? "null") as { tasks?: Task[] } | null;
-      return Array.isArray(parsed?.tasks) ? ensureUniqueTaskIds(parsed.tasks) : null;
+      const tasks = Array.isArray(parsed?.tasks) ? ensureUniqueTaskIds(parsed.tasks) : null;
+      return tasks ? this.applyPersonalFilter(tasks) : null;
     } catch { return null; }
   }
 
@@ -116,11 +128,13 @@ export class ApiScheduleTaskRepository implements ScheduleTaskRepository {
 
   private emit(): void {
     if (!this.listener) return;
-    if (!this.desired) return this.listener(ensureUniqueTaskIds([...this.known.values()]));
-    this.listener(ensureUniqueTaskIds(this.desired.map((task) => {
-      const server = this.known.get(task.id);
-      return server ? { ...task, version: server.version, updatedAt: server.updatedAt, commentCount: server.commentCount ?? task.commentCount } : task;
-    })));
+    const allTasks = this.desired
+      ? ensureUniqueTaskIds(this.desired.map((task) => {
+          const server = this.known.get(task.id);
+          return server ? { ...task, version: server.version, updatedAt: server.updatedAt, commentCount: server.commentCount ?? task.commentCount } : task;
+        }))
+      : ensureUniqueTaskIds([...this.known.values()]);
+    this.listener(this.applyPersonalFilter(allTasks));
   }
 
   private remember(tasks: Task[]): void { this.known = new Map(tasks.map((task) => [task.id, task])); this.cache(tasks); }
