@@ -4,6 +4,8 @@ export interface Task {
   notificationPending?: boolean;
   /** Derived from persisted comments; not stored inside the task JSON payload. */
   commentCount?: number;
+  /** Derived from persisted images; not stored inside the task JSON payload. */
+  imageCount?: number;
   /** Incremented by the server; used to reject concurrent stale edits. */
   version?: number;
   /** Server timestamp of the most recent persisted change. */

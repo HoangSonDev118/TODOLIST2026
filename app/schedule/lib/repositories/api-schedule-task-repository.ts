@@ -9,7 +9,7 @@ type TaskEvent = { tasks: Task[]; deletedIds: number[] };
 
 function signature(task: Task): string {
   const value = { ...task };
-  delete value.version; delete value.updatedAt; delete value.commentCount;
+  delete value.version; delete value.updatedAt; delete value.commentCount; delete value.imageCount;
   return JSON.stringify(value);
 }
 
@@ -131,7 +131,7 @@ export class ApiScheduleTaskRepository implements ScheduleTaskRepository {
     const allTasks = this.desired
       ? ensureUniqueTaskIds(this.desired.map((task) => {
           const server = this.known.get(task.id);
-          return server ? { ...task, version: server.version, updatedAt: server.updatedAt, commentCount: server.commentCount ?? task.commentCount } : task;
+          return server ? { ...task, version: server.version, updatedAt: server.updatedAt, commentCount: server.commentCount ?? task.commentCount, imageCount: server.imageCount ?? task.imageCount } : task;
         }))
       : ensureUniqueTaskIds([...this.known.values()]);
     this.listener(this.applyPersonalFilter(allTasks));

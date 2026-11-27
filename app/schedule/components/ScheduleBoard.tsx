@@ -1768,6 +1768,14 @@ export default function SchedulePage() {
                             </svg>
                           </span>
                         )}
+                        {(task.imageCount ?? 0) > 0 && (
+                          <span className="ml-1 inline-flex shrink-0 items-center gap-0.5 rounded-full border border-amber-400/30 bg-amber-500/15 px-1.5 py-0.5 text-[8px] leading-none text-amber-300" aria-label={`${task.imageCount} hình ảnh`}>
+                            <svg viewBox="0 0 24 24" fill="none" className="h-2.5 w-2.5" aria-hidden>
+                              <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            <span className="font-semibold tabular-nums">{task.imageCount}</span>
+                          </span>
+                        )}
                         {isOverdue && <span className={`absolute bottom-0 left-0 right-0 text-center text-[8px] leading-[10px] ${isCompanySchedule ? "bg-zinc-600" : "bg-red-600"}`}>{isCompanySchedule ? "ĐÃ HẾT HẠN" : "QUÁ HẠN"}</span>}
                       </div>
                     </div>
@@ -2039,6 +2047,15 @@ export default function SchedulePage() {
                         <svg viewBox="0 0 20 20" fill="none" className="h-3 w-3" aria-hidden>
                           <path d="M16.5 9.5a6.5 6.5 0 0 1-7 6.48 7.5 7.5 0 0 1-2.65-.7L3 16.5l1.2-3.25A6.5 6.5 0 1 1 16.5 9.5Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
+                      </div>
+                    )}
+
+                    {(task.imageCount ?? 0) > 0 && (
+                      <div className={`mt-1 inline-flex w-fit items-center gap-1 rounded-full border border-amber-400/25 bg-amber-500/12 px-1.5 py-0.5 text-amber-300 ${metaTextClass}`} aria-label={`${task.imageCount} hình ảnh`}>
+                        <svg viewBox="0 0 24 24" fill="none" className="h-3 w-3" aria-hidden>
+                          <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                        <span className="font-semibold tabular-nums">{task.imageCount}</span>
                       </div>
                     )}
 

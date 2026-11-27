@@ -12,7 +12,7 @@ export const maxDuration = 90;
 const COMPLETION_NOTIFICATION_DELAY_MINUTES = 1;
 const COMPLETION_DISPATCH_DELAY_MS = 61_000;
 
-type StoredRow = { id: string | number; data: Task | string; version: number; updated_at: string | Date; comment_count?: string | number };
+type StoredRow = { id: string | number; data: Task | string; version: number; updated_at: string | Date; comment_count?: string | number; image_count?: string | number };
 type TaskContext = { scope?: ScheduleScope; ownerId?: number | null };
 type MutationBody = TaskContext & { changes?: Task[]; deletedIds?: number[] };
 
@@ -59,7 +59,7 @@ function parseContext(value: TaskContext): { scope: ScheduleScope; ownerId: numb
 
 function rowToTask(row: StoredRow): Task {
   const data = typeof row.data === "string" ? (JSON.parse(row.data) as Task) : row.data;
-  return { ...data, id: Number(row.id), version: Number(row.version), updatedAt: new Date(row.updated_at).toISOString(), commentCount: Number(row.comment_count ?? 0) };
+  return { ...data, id: Number(row.id), version: Number(row.version), updatedAt: new Date(row.updated_at).toISOString(), commentCount: Number(row.comment_count ?? 0), imageCount: Number(row.image_count ?? 0) };
 }
 
 async function commentCountFor(scopeKey: string, taskId: number): Promise<number> {
@@ -143,9 +143,10 @@ export async function GET(request: Request) {
   const viewerId = params.has("viewerId") ? Number(params.get("viewerId")) : null;
   if (!context) return Response.json({ error: "A valid schedule scope is required." }, { status: 400 });
   await ensureTable();
-  const rows = (await sql`SELECT entry.id, entry.data, entry.version, entry.updated_at, COUNT(task_comment.id)::integer AS comment_count
+  const rows = (await sql`SELECT entry.id, entry.data, entry.version, entry.updated_at, COUNT(task_comment.id)::integer AS comment_count, COUNT(DISTINCT task_image.id)::integer AS image_count
     FROM schedule_task_entries entry
     LEFT JOIN schedule_task_comments task_comment ON task_comment.scope_key = entry.scope_key AND task_comment.task_id = entry.id
+    LEFT JOIN schedule_task_images task_image ON task_image.scope_key = entry.scope_key AND task_image.task_id = entry.id
     WHERE entry.scope_key = ${context.scopeKey}
     GROUP BY entry.scope_key, entry.id, entry.data, entry.version, entry.updated_at
     ORDER BY entry.id`) as StoredRow[];

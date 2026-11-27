@@ -10,6 +10,12 @@ import { getMultiDayEndSlot, isMultiDayTask } from "../lib/multi-day";
 import type { ScheduleScope, SessionUser, Task, TaskComment, TaskLabelValue } from "../lib/types";
 import { HalfHourTimePicker } from "./HalfHourTimePicker";
 
+interface TaskImage {
+  id: number;
+  imageData: string;
+  createdAt: string;
+}
+
 interface TaskEditModalProps {
   task: Task;
   isCompanySchedule: boolean;
@@ -94,6 +100,12 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
   const [deletingCommentId, setDeletingCommentId] = useState<number | null>(null);
   const [newCommentId, setNewCommentId] = useState<number | null>(null);
   const [commentError, setCommentError] = useState<string | null>(null);
+  const [images, setImages] = useState<TaskImage[]>([]);
+  const [imagesLoading, setImagesLoading] = useState(true);
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const onCommentCountChangeRef = useRef(onCommentCountChange);
   onCommentCountChangeRef.current = onCommentCountChange;
   const confirmedUsers = task.confirmedByUserIds
@@ -162,6 +174,73 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
     }
   };
 
+  const loadImages = async () => {
+    const params = new URLSearchParams({ scope: scheduleScope, taskId: String(task.id) });
+    if (scheduleScope === "USER" && scheduleOwnerId !== null) params.set("ownerId", String(scheduleOwnerId));
+    try {
+      const response = await fetch(`/api/schedule/tasks/images?${params}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Không thể tải hình ảnh.");
+      const data = await response.json() as TaskImage[];
+      setImages(data);
+      setImageError(null);
+    } catch (error) {
+      setImageError(error instanceof Error ? error.message : "Không thể tải hình ảnh.");
+    } finally {
+      setImagesLoading(false);
+    }
+  };
+
+  const handleImageUpload = async (file: File) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError("Kích thước ảnh quá lớn. Tối đa 5MB.");
+      return;
+    }
+    setImageUploading(true);
+    setImageError(null);
+    try {
+      const reader = new FileReader();
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Không thể đọc file."));
+        reader.readAsDataURL(file);
+      });
+      const response = await fetch("/api/schedule/tasks/images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: scheduleScope, ownerId: scheduleOwnerId, taskId: task.id, imageData: dataUrl }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Không thể tải lên ảnh." }));
+        throw new Error(errorData.error || "Không thể tải lên ảnh.");
+      }
+      const savedImage = await response.json() as TaskImage;
+      setImages((current) => [...current, savedImage]);
+    } catch (error) {
+      setImageError(error instanceof Error ? error.message : "Không thể tải lên ảnh.");
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) void handleImageUpload(file);
+    if (event.target) event.target.value = "";
+  };
+
+  const deleteImage = async (imageId: number) => {
+    const params = new URLSearchParams({ scope: scheduleScope, imageId: String(imageId) });
+    if (scheduleScope === "USER" && scheduleOwnerId !== null) params.set("ownerId", String(scheduleOwnerId));
+    try {
+      const response = await fetch(`/api/schedule/tasks/images?${params}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Không thể xóa ảnh.");
+      setImages((current) => current.filter((img) => img.id !== imageId));
+    } catch (error) {
+      setImageError(error instanceof Error ? error.message : "Không thể xóa ảnh.");
+    }
+  };
+
   useEffect(() => {
     let active = true;
     const params = new URLSearchParams({ scope: scheduleScope, taskId: String(task.id) });
@@ -221,6 +300,12 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
     document.addEventListener("pointerdown", closeConfirmers);
     return () => document.removeEventListener("pointerdown", closeConfirmers);
   }, [confirmersOpen]);
+
+  useEffect(() => {
+    setImagesLoading(true);
+    setImages([]);
+    void loadImages();
+  }, [scheduleOwnerId, scheduleScope, task.id]);
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 p-3" onClick={onClose}>
@@ -309,6 +394,99 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
             {!isReadOnly && <button type="button" onClick={() => { setTitle(""); patchAndMarkChanged({ title: "" }); }} aria-label="Xóa tiêu đề" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-600 text-sm text-zinc-300">×</button>}
           </div>
           <textarea readOnly={isReadOnly} value={description} onChange={(event) => { setDescription(event.target.value); setHasChanges(true); }} onBlur={() => { if (!isReadOnly) onPatch({ description }); }} className="mt-3 h-[60px] w-full resize-none overflow-y-auto bg-transparent text-sm leading-5 outline-none" placeholder="Nhập mô tả" />
+          
+          {/* Image Section */}
+          <div className="mt-3">
+            {!isReadOnly && (
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  aria-label="Chọn ảnh từ thiết bị"
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="user"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  aria-label="Chụp ảnh"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={imageUploading || images.length >= 5}
+                  className="flex items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3 py-2 text-sm text-zinc-400 transition hover:border-white/40 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Thêm ảnh từ thư viện"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden>
+                    <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Ảnh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={imageUploading || images.length >= 5}
+                  className="flex items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3 py-2 text-sm text-zinc-400 transition hover:border-white/40 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Chụp ảnh mới"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden>
+                    <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                    <circle cx="12" cy="13" r="3" stroke="currentColor" strokeWidth="1.8"/>
+                  </svg>
+                  Chụp
+                </button>
+                {imageUploading && (
+                  <span className="flex items-center gap-1.5 text-xs text-sky-400">
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-sky-400 border-t-transparent" aria-hidden />
+                    Đang tải lên...
+                  </span>
+                )}
+              </div>
+            )}
+            
+            {imageError && <p className="mb-2 text-xs text-red-400">{imageError}</p>}
+            
+            {/* Image Preview Grid */}
+            {images.length > 0 && (
+              <div className={`grid gap-2 ${images.length === 1 ? "grid-cols-1" : images.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
+                {images.map((image) => (
+                  <div key={image.id} className="group relative aspect-square overflow-hidden rounded-lg bg-zinc-800">
+                    <img
+                      src={image.imageData}
+                      alt={`Ảnh đính kèm ${image.id}`}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                    {!isReadOnly && (
+                      <button
+                        type="button"
+                        onClick={() => void deleteImage(image.id)}
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition hover:bg-red-500 group-hover:opacity-100"
+                        aria-label="Xóa ảnh"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
+                          <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {imagesLoading && (
+              <div className="flex items-center justify-center py-4">
+                <span className="h-5 w-5 animate-spin rounded-full border-2 border-zinc-400 border-t-transparent" aria-hidden />
+              </div>
+            )}
+          </div>
         </div>
 
         <div className={`border-b border-white/15 px-[18px] py-4 ${isReadOnly ? "pointer-events-none opacity-75" : ""}`}>
