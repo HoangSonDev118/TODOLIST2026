@@ -7,7 +7,6 @@ import { SLOTS, STATUS_LABEL } from "../lib/constants";
 import { absDayToDate, absDayToDateInput, dateInputToAbsDay, dayShortOf } from "../lib/date";
 import { colorToDisplayHex } from "../lib/domain/task";
 import { getMultiDayEndSlot, isMultiDayTask } from "../lib/multi-day";
-import { uploadAvatarToCloudinary } from "../lib/avatar";
 import type { ScheduleScope, SessionUser, Task, TaskComment, TaskLabelValue } from "../lib/types";
 import { HalfHourTimePicker } from "./HalfHourTimePicker";
 
@@ -201,18 +200,35 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
     setImageUploading(true);
     setImageError(null);
     try {
-      // Upload to Cloudinary
-      const imageUrl = await uploadAvatarToCloudinary(file);
+      // Step 1: Upload to Cloudinary via server API
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", file);
       
-      // Save URL to database
+      const uploadResponse = await fetch("/api/schedule/tasks/images/upload", {
+        method: "POST",
+        body: uploadFormData,
+      });
+      
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json().catch(() => ({ error: "Không thể tải ảnh lên Cloudinary." }));
+        throw new Error(errorData.error || "Không thể tải ảnh lên Cloudinary.");
+      }
+      
+      const { imageUrl } = await uploadResponse.json() as { imageUrl: string };
+      
+      if (!imageUrl) {
+        throw new Error("Không nhận được URL ảnh từ Cloudinary.");
+      }
+      
+      // Step 2: Save URL to database
       const response = await fetch("/api/schedule/tasks/images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ scope: scheduleScope, ownerId: scheduleOwnerId, taskId: task.id, imageUrl }),
       });
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Không thể tải lên ảnh." }));
-        throw new Error(errorData.error || "Không thể tải lên ảnh.");
+        const errorData = await response.json().catch(() => ({ error: "Không thể lưu ảnh." }));
+        throw new Error(errorData.error || "Không thể lưu ảnh.");
       }
       const savedImage = await response.json() as TaskImage;
       setImages((current) => [...current, savedImage]);
