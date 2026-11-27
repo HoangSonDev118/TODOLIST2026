@@ -21,7 +21,7 @@ export class ApiScheduleTaskRepository implements ScheduleTaskRepository {
   private drainPromise: Promise<void> | null = null;
   private revision = 0;
 
-  constructor(private readonly scope: ScheduleScope, private readonly ownerId: number | null) {}
+  constructor(private readonly scope: ScheduleScope, private readonly ownerId: number | null, private readonly viewerId: number | null = null) {}
 
   async load(): Promise<Task[]> {
     const tasks = await this.fetchCloud();
@@ -128,7 +128,7 @@ export class ApiScheduleTaskRepository implements ScheduleTaskRepository {
   private cacheKey(): string { return `dhs-todo:schedule-cache:${this.scope}:${this.ownerId ?? "company"}`; }
   private channelName(): string { return this.scope === "COMPANY" ? "schedule:company" : `schedule:user:${this.ownerId}`; }
   private async fetchCloud(): Promise<Task[]> {
-    const query = new URLSearchParams({ scope: this.scope, ...(this.scope === "USER" && this.ownerId !== null ? { ownerId: String(this.ownerId) } : {}) });
+    const query = new URLSearchParams({ scope: this.scope, ...(this.scope === "USER" && this.ownerId !== null ? { ownerId: String(this.ownerId) } : {}), ...(this.viewerId !== null ? { viewerId: String(this.viewerId) } : {}) });
     const response = await fetch(`/api/schedule/tasks?${query}`, { cache: "no-store" });
     if (!response.ok) throw new Error("LOAD_FAILED");
     return ensureUniqueTaskIds(await response.json() as Task[]);

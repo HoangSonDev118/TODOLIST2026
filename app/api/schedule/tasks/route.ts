@@ -140,6 +140,7 @@ async function createNotifications(context: { scope: ScheduleScope; ownerId: num
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const context = parseContext({ scope: params.get("scope") as ScheduleScope | null ?? undefined, ownerId: params.has("ownerId") ? Number(params.get("ownerId")) : null });
+  const viewerId = params.has("viewerId") ? Number(params.get("viewerId")) : null;
   if (!context) return Response.json({ error: "A valid schedule scope is required." }, { status: 400 });
   await ensureTable();
   const rows = (await sql`SELECT entry.id, entry.data, entry.version, entry.updated_at, COUNT(task_comment.id)::integer AS comment_count
@@ -148,7 +149,11 @@ export async function GET(request: Request) {
     WHERE entry.scope_key = ${context.scopeKey}
     GROUP BY entry.scope_key, entry.id, entry.data, entry.version, entry.updated_at
     ORDER BY entry.id`) as StoredRow[];
-  const tasks = rows.map(rowToTask);
+  let tasks = rows.map(rowToTask);
+  // Filter out PERSONAL tasks when viewer is not the owner of a USER schedule
+  if (context.scope === "USER" && viewerId !== null && context.ownerId !== null && viewerId !== context.ownerId) {
+    tasks = tasks.filter((task) => task.label !== "PERSONAL");
+  }
   const deletedIds = tasks.filter((task) => shouldAutoDeleteTask(task)).map((task) => task.id);
   for (const id of deletedIds) await sql`DELETE FROM schedule_task_entries WHERE scope_key = ${context.scopeKey} AND id = ${id}`;
   if (deletedIds.length > 0) await publish(context, [], deletedIds);

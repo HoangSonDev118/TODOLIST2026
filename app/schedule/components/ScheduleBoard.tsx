@@ -170,7 +170,7 @@ export default function SchedulePage() {
   const [authUserId, setAuthUserId]       = useState<number | null>(null);
   const [authError, setAuthError]         = useState<string | null>(null);
   const [authBusy, setAuthBusy]           = useState(false);
-  const { tasks, setTasks, isLoading: isScheduleLoading, isReady: isScheduleDataReady } = useScheduleTasks(scheduleScope, authUserId);
+  const { tasks, setTasks, isLoading: isScheduleLoading, isReady: isScheduleDataReady } = useScheduleTasks(scheduleScope, authUserId, sessionUser?.id ?? null);
   const { notifications, unreadCount, isMarkingAllRead, isDeletingAll, markAllRead, markRead, deleteAll } = useNotifications(sessionUser?.id ?? null);
   const pushNotifications = usePushNotifications(sessionUser?.id ?? null);
   const avatarInputRef                    = useRef<HTMLInputElement>(null);
@@ -2564,6 +2564,7 @@ export default function SchedulePage() {
             scheduleScope={scheduleScope}
             scheduleOwnerId={authUserId}
             isDark={isDark}
+            isViewingOwnSchedule={isViewingOwnSchedule}
             users={usersForAuth}
             currentUser={sessionUser}
             onClose={() => {

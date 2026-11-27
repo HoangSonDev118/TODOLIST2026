@@ -4,12 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiScheduleTaskRepository } from "../repositories/api-schedule-task-repository";
 import type { ScheduleScope, Task } from "../types";
 
-export function useScheduleTasks(scope: ScheduleScope, ownerId: number | null) {
+export function useScheduleTasks(scope: ScheduleScope, ownerId: number | null, viewerId: number | null = null) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeDataKey, setActiveDataKey] = useState<string | null>(null);
   const skipNextSave = useRef(false);
-  const repository = useMemo(() => new ApiScheduleTaskRepository(scope, ownerId), [scope, ownerId]);
+  const repository = useMemo(() => new ApiScheduleTaskRepository(scope, ownerId, viewerId), [scope, ownerId, viewerId]);
   const requestedDataKey = `${scope}:${ownerId ?? "company"}`;
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export function useScheduleTasks(scope: ScheduleScope, ownerId: number | null) {
       active = false;
       unsubscribe();
     };
-  }, [ownerId, repository, requestedDataKey, scope]);
+  }, [ownerId, repository, requestedDataKey, scope, viewerId]);
 
   useEffect(() => {
     if (isLoading) return;

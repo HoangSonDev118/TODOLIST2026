@@ -18,6 +18,7 @@ interface TaskEditModalProps {
   isOverdue: boolean;
   isReadOnly: boolean;
   isDark: boolean;
+  isViewingOwnSchedule: boolean;
   users: SessionUser[];
   currentUser: SessionUser | null;
   onClose: () => void;
@@ -68,7 +69,7 @@ function commentTimeLabel(createdAt: string) {
   return `${Math.floor(hours / 24)} ngày trước`;
 }
 
-export function TaskEditModal({ task, isCompanySchedule, scheduleScope, scheduleOwnerId, isOverdue, isReadOnly, isDark, users, currentUser, onClose, onDelete, onAccept, onCommentCountChange, onPatch }: TaskEditModalProps) {
+export function TaskEditModal({ task, isCompanySchedule, scheduleScope, scheduleOwnerId, isOverdue, isReadOnly, isDark, isViewingOwnSchedule, users, currentUser, onClose, onDelete, onAccept, onCommentCountChange, onPatch }: TaskEditModalProps) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(true);
   const [confirmersOpen, setConfirmersOpen] = useState(false);
@@ -288,6 +289,20 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
             )
           )}
           <button type="button" onClick={onDelete} className="rounded-md bg-red-500 px-5 py-2 text-sm font-bold transition hover:bg-red-600">Xóa</button>
+          {!isCompanySchedule && isViewingOwnSchedule && !isReadOnly && (
+            <button
+              type="button"
+              onClick={() => patchAndMarkChanged({ label: task.label === "PERSONAL" ? "DEFAULT" : "PERSONAL" })}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition ${task.label === "PERSONAL" ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30" : "bg-zinc-700 text-zinc-300 border border-zinc-600"}`}
+              title={task.label === "PERSONAL" ? "Việc cá nhân: Chỉ bạn nhìn thấy" : "Giao việc: Mọi người đều thấy"}
+            >
+              {task.label === "PERSONAL" ? (
+                <><svg viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5"><path fillRule="evenodd" d="M8 1a3.5 3.5 0 0 0-3.5 3.5v7A3.5 3.5 0 0 0 11.5 15h2a.5.5 0 0 0 .5-.5v-12a.5.5 0 0 0-.5-.5h-2A3.5 3.5 0 0 0 8 1z" /></svg>Việc cá nhân</>
+              ) : (
+                <>Giao việc</>
+              )}
+            </button>
+          )}
         </div>
 
         <div className="border-b border-white/15 px-[18px] py-5">
