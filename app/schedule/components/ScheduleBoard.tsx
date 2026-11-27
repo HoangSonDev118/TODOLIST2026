@@ -36,6 +36,7 @@ import { usePushNotifications } from "../lib/hooks/use-push-notifications";
 import { ACTIVE_USER_STORAGE_KEY, readActiveUserId } from "../lib/session";
 import { TaskAvatar } from "./TaskAvatar";
 import { TaskEditModal } from "./TaskEditModal";
+import { TaskImageThumbnail } from "./TaskImageThumbnail";
 import { TodayTaskList } from "./TodayTaskList";
 import type { AppNotification, ScheduleScope, SessionUser, Task, TaskLabelValue, TaskStatus } from "../lib/types";
 
@@ -1916,6 +1917,9 @@ export default function SchedulePage() {
                 const showCommentCount = (task.commentCount ?? 0) > 0
                   && !isUltraCompactCard
                   && h >= 72 + visibleCommentPrecedingRows * 14;
+                const showTaskImage = (task.imageCount ?? 0) > 0
+                  && !isUltraCompactCard
+                  && h >= 130 + visibleCommentPrecedingRows * 14;
                 const actionButtonClass = isUltraCompactCard
                   ? "self-end rounded-md border px-1.5 py-0.5 text-[8px] font-semibold shadow-md"
                   : "self-end rounded-md border px-2 py-0.5 text-[9px] font-semibold shadow-md";
@@ -2057,6 +2061,10 @@ export default function SchedulePage() {
                         </svg>
                         <span className="font-semibold tabular-nums">{task.imageCount}</span>
                       </div>
+                    )}
+
+                    {showTaskImage && (
+                      <TaskImageThumbnail taskId={task.id} scope={scheduleScope} ownerId={scheduleScope === "USER" ? authUserId : null} />
                     )}
 
                     {!isOverdue && isCompanySchedule && showCompanyMeta && (confirmerUsers.length > 0 || canConfirmCompanyTask) && (

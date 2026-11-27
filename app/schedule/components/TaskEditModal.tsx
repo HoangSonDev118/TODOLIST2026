@@ -1,18 +1,19 @@
 "use client";
 
 import * as Ably from "ably";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { HexColorPicker } from "react-colorful";
 import { SLOTS, STATUS_LABEL } from "../lib/constants";
 import { absDayToDate, absDayToDateInput, dateInputToAbsDay, dayShortOf } from "../lib/date";
 import { colorToDisplayHex } from "../lib/domain/task";
 import { getMultiDayEndSlot, isMultiDayTask } from "../lib/multi-day";
+import { uploadAvatarToCloudinary } from "../lib/avatar";
 import type { ScheduleScope, SessionUser, Task, TaskComment, TaskLabelValue } from "../lib/types";
 import { HalfHourTimePicker } from "./HalfHourTimePicker";
 
 interface TaskImage {
   id: number;
-  imageData: string;
+  imageUrl: string;
   createdAt: string;
 }
 
@@ -104,6 +105,7 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
   const [imagesLoading, setImagesLoading] = useState(true);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const onCommentCountChangeRef = useRef(onCommentCountChange);
@@ -192,23 +194,21 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
 
   const handleImageUpload = async (file: File) => {
     if (!file || !file.type.startsWith("image/")) return;
-    if (file.size > 5 * 1024 * 1024) {
-      setImageError("Kích thước ảnh quá lớn. Tối đa 5MB.");
+    if (file.size > 10 * 1024 * 1024) {
+      setImageError("Kích thước ảnh quá lớn. Tối đa 10MB.");
       return;
     }
     setImageUploading(true);
     setImageError(null);
     try {
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error("Không thể đọc file."));
-        reader.readAsDataURL(file);
-      });
+      // Upload to Cloudinary
+      const imageUrl = await uploadAvatarToCloudinary(file);
+      
+      // Save URL to database
       const response = await fetch("/api/schedule/tasks/images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope: scheduleScope, ownerId: scheduleOwnerId, taskId: task.id, imageData: dataUrl }),
+        body: JSON.stringify({ scope: scheduleScope, ownerId: scheduleOwnerId, taskId: task.id, imageUrl }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Không thể tải lên ảnh." }));
@@ -240,6 +240,38 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
       setImageError(error instanceof Error ? error.message : "Không thể xóa ảnh.");
     }
   };
+
+  const openLightbox = useCallback((index: number) => {
+    setLightboxIndex(index);
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxIndex(null);
+  }, []);
+
+  const goToPrevImage = useCallback(() => {
+    setLightboxIndex((prev) => prev !== null && prev > 0 ? prev - 1 : prev);
+  }, []);
+
+  const goToNextImage = useCallback(() => {
+    setLightboxIndex((prev) => prev !== null && prev < images.length - 1 ? prev + 1 : prev);
+  }, [images.length]);
+
+  // Keyboard navigation for lightbox
+  useEffect(() => {
+    if (lightboxIndex === null) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeLightbox();
+      else if (e.key === "ArrowLeft") goToPrevImage();
+      else if (e.key === "ArrowRight") goToNextImage();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [lightboxIndex, closeLightbox, goToPrevImage, goToNextImage]);
 
   useEffect(() => {
     let active = true;
@@ -403,26 +435,25 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
                   ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  capture="environment"
                   onChange={handleFileChange}
                   className="hidden"
-                  aria-label="Chọn ảnh từ thiết bị"
+                  aria-label="Chọn ảnh từ thư viện"
                 />
                 <input
                   ref={cameraInputRef}
                   type="file"
                   accept="image/*"
-                  capture="user"
+                  capture="environment"
                   onChange={handleFileChange}
                   className="hidden"
-                  aria-label="Chụp ảnh"
+                  aria-label="Chụp ảnh bằng camera sau"
                 />
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   disabled={imageUploading || images.length >= 5}
                   className="flex items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3 py-2 text-sm text-zinc-400 transition hover:border-white/40 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Thêm ảnh từ thư viện"
+                  title="Chọn ảnh từ thư viện"
                 >
                   <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden>
                     <path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -434,7 +465,7 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
                   onClick={() => cameraInputRef.current?.click()}
                   disabled={imageUploading || images.length >= 5}
                   className="flex items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3 py-2 text-sm text-zinc-400 transition hover:border-white/40 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Chụp ảnh mới"
+                  title="Mở camera sau để chụp ảnh"
                 >
                   <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden>
                     <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -456,19 +487,26 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
             {/* Image Preview Grid */}
             {images.length > 0 && (
               <div className={`grid gap-2 ${images.length === 1 ? "grid-cols-1" : images.length === 2 ? "grid-cols-2" : "grid-cols-3"}`}>
-                {images.map((image) => (
+                {images.map((image, index) => (
                   <div key={image.id} className="group relative aspect-square overflow-hidden rounded-lg bg-zinc-800">
+                    <button
+                      type="button"
+                      onClick={() => openLightbox(index)}
+                      className="absolute inset-0 z-10 cursor-zoom-in"
+                      aria-label={`Xem ảnh phóng to ${index + 1}`}
+                    />
                     <img
-                      src={image.imageData}
+                      src={image.imageUrl}
                       alt={`Ảnh đính kèm ${image.id}`}
                       className="h-full w-full object-cover"
                       loading="lazy"
                     />
+                    {/* Always visible delete button */}
                     {!isReadOnly && (
                       <button
                         type="button"
-                        onClick={() => void deleteImage(image.id)}
-                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition hover:bg-red-500 group-hover:opacity-100"
+                        onClick={(e) => { e.stopPropagation(); void deleteImage(image.id); }}
+                        className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white shadow-lg transition hover:bg-red-600 active:scale-95"
                         aria-label="Xóa ảnh"
                       >
                         <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" aria-hidden>
@@ -476,6 +514,12 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
                         </svg>
                       </button>
                     )}
+                    {/* Zoom icon indicator */}
+                    <div className="absolute left-1.5 bottom-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/50 text-white/80">
+                      <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" aria-hidden>
+                        <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -576,6 +620,64 @@ export function TaskEditModal({ task, isCompanySchedule, scheduleScope, schedule
             </div>
           </div>
         </div>
+
+        {/* Lightbox for full-screen image view */}
+        {lightboxIndex !== null && images[lightboxIndex] && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95" onClick={closeLightbox}>
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={closeLightbox}
+              className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+              aria-label="Đóng xem ảnh"
+            >
+              <svg viewBox="0 0 24 24" fill="none" className="h-6 w-6" aria-hidden>
+                <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+
+            {/* Previous button */}
+            {lightboxIndex > 0 && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); goToPrevImage(); }}
+                className="absolute left-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Ảnh trước"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7" aria-hidden>
+                  <path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+
+            {/* Image */}
+            <img
+              src={images[lightboxIndex].imageUrl}
+              alt={`Ảnh phóng to ${lightboxIndex + 1} / ${images.length}`}
+              className="max-h-[90vh] max-w-[90vw] object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+
+            {/* Next button */}
+            {lightboxIndex < images.length - 1 && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); goToNextImage(); }}
+                className="absolute right-4 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+                aria-label="Ảnh tiếp theo"
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-7 w-7" aria-hidden>
+                  <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            )}
+
+            {/* Image counter */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-white/15 px-4 py-1.5 text-sm text-white">
+              {lightboxIndex + 1} / {images.length}
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );

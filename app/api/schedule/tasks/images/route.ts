@@ -5,9 +5,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_IMAGES_PER_TASK = 5;
-const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 
-type ImageRow = { id: number; task_id: number; scope_key: string; image_data: string; created_at: string };
+type ImageRow = { id: number; task_id: number; scope_key: string; image_url: string; created_at: string };
 
 function getScopeKey(scope: ScheduleScope | undefined, ownerId: number | null): string | null {
   if (scope === "COMPANY") return "COMPANY";
@@ -22,7 +22,7 @@ async function ensureTable(): Promise<void> {
     id BIGSERIAL PRIMARY KEY,
     scope_key TEXT NOT NULL,
     task_id BIGINT NOT NULL,
-    image_data TEXT NOT NULL,
+    image_url TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     FOREIGN KEY (scope_key, task_id) REFERENCES schedule_task_entries(scope_key, id) ON DELETE CASCADE
   )`;
@@ -41,11 +41,11 @@ export async function GET(request: Request) {
   }
 
   await ensureTable();
-  const rows = (await sql`SELECT id, task_id, scope_key, image_data, created_at FROM schedule_task_images WHERE scope_key = ${scopeKey} AND task_id = ${taskId} ORDER BY created_at ASC`) as ImageRow[];
+  const rows = (await sql`SELECT id, task_id, scope_key, image_url, created_at FROM schedule_task_images WHERE scope_key = ${scopeKey} AND task_id = ${taskId} ORDER BY created_at ASC`) as ImageRow[];
   
   const images = rows.map((row) => ({
     id: Number(row.id),
-    imageData: row.image_data,
+    imageUrl: row.image_url,
     createdAt: new Date(row.created_at).toISOString(),
   }));
 
@@ -53,7 +53,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  let body: { scope?: ScheduleScope; ownerId?: number | null; taskId?: number; imageData?: string };
+  let body: { scope?: ScheduleScope; ownerId?: number | null; taskId?: number; imageUrl?: string };
   try {
     body = await request.json();
   } catch {
@@ -61,21 +61,14 @@ export async function POST(request: Request) {
   }
 
   const scopeKey = getScopeKey(body.scope, body.ownerId ?? null);
-  if (!scopeKey || !Number.isSafeInteger(body.taskId) || (body.taskId as number) < 1 || !body.imageData) {
+  if (!scopeKey || !Number.isSafeInteger(body.taskId) || (body.taskId as number) < 1 || !body.imageUrl) {
     return Response.json({ error: "Invalid parameters." }, { status: 400 });
   }
 
-  // Validate image data (base64)
-  const imageData = body.imageData;
-  if (!imageData.startsWith("data:image/")) {
-    return Response.json({ error: "Invalid image format. Must be a data URL." }, { status: 400 });
-  }
-
-  // Check size (rough estimate for base64)
-  const base64Part = imageData.split(",")[1] ?? "";
-  const estimatedSize = Math.floor(base64Part.length * 0.75);
-  if (estimatedSize > MAX_IMAGE_SIZE_BYTES) {
-    return Response.json({ error: "Image too large. Maximum size is 5MB." }, { status: 400 });
+  // Validate Cloudinary URL
+  const imageUrl = body.imageUrl;
+  if (!imageUrl.startsWith("https://res.cloudinary.com/") && !imageUrl.startsWith("https://media.cloudinary.com/")) {
+    return Response.json({ error: "Invalid image URL. Must be a Cloudinary URL." }, { status: 400 });
   }
 
   await ensureTable();
@@ -88,14 +81,14 @@ export async function POST(request: Request) {
   }
 
   try {
-    const rows = (await sql`INSERT INTO schedule_task_images (scope_key, task_id, image_data) VALUES (${scopeKey}, ${body.taskId}, ${imageData}) RETURNING id, task_id, image_data, created_at`) as ImageRow[];
+    const rows = (await sql`INSERT INTO schedule_task_images (scope_key, task_id, image_url) VALUES (${scopeKey}, ${body.taskId}, ${imageUrl}) RETURNING id, task_id, image_url, created_at`) as ImageRow[];
     const savedImage = rows[0];
     if (!savedImage) {
       return Response.json({ error: "Failed to save image." }, { status: 500 });
     }
     return Response.json({
       id: Number(savedImage.id),
-      imageData: savedImage.image_data,
+      imageUrl: savedImage.image_url,
       createdAt: new Date(savedImage.created_at).toISOString(),
     });
   } catch (error) {
